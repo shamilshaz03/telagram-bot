@@ -1,0 +1,10 @@
+version: "3.10"
+services:
+   worker:
+    build: .
+    environment:
+      TOKEN: $TOKEN
+      CHANNEL: $CHANNEL
+      ADMINS: $ADMINS
+      DATABASE_NAME: $DATABASE_NAME
+      DATABASE_URI: $DATABASE_URI
