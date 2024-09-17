@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize MongoDB client
 client = pymongo.MongoClient(config.MONGODB_URI)
-db = client[config.MONGODB_DB_NAME]
+db = client[config.MONGODB_DB_NAME]  # Ensure MONGODB_DB_NAME exists in config.py
 users_collection = db['users']
 
 # Define a function to handle /start command
