@@ -1,7 +1,7 @@
 # config.py
 
 # Telegram Bot Token
-TOKEN = 'your-telegram-bot-token'
+TOKEN = '6875820709:AAFA_nOFvrdp2kBxAtKR1qPJbw2szfUJGxM'
 
 # MongoDB Configuration
 MONGODB_URI = 'your-mongodb-uri'
