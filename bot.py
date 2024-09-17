@@ -1,126 +1,104 @@
 import logging
-from pymongo import MongoClient
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler
+import pymongo
 import config
 
-# Setup logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+# Set up logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# MongoDB setup
-client = MongoClient(config.MONGODB_URI)
-db = client[config.DATABASE_NAME]
+# Initialize MongoDB client
+client = pymongo.MongoClient(config.MONGODB_URI)
+db = client[config.MONGODB_DB_NAME]
 users_collection = db['users']
 
-# List of image URLs
-image_urls = config.DEFAULT_IMAGE_URLS
-
-current_page = {}
-
-def add_user(user_id, username):
-    """Add or update user data in MongoDB."""
-    users_collection.update_one(
-        {'user_id': user_id},
-        {'$set': {'username': username}},
-        upsert=True
-    )
-
-def get_user_count():
-    """Get the total count of users from MongoDB."""
-    return users_collection.count_documents({})
-
-def get_chat_count():
-    """Example: Get total chats count."""
-    return 950  # Example number of chats
-
-def show_statistics(update, context):
-    if update.message.chat_id == config.ADMIN_ID:
-        user_count = get_user_count()
-        chat_count = get_chat_count()
-        message = (
-            f"★ Total Users: {user_count}\n"
-            f"★ Total Chats: {chat_count}\n"
-            f"★ Used Storage: {used_storage:.2f} MB\n"
-            f"★ Free Storage: {free_storage:.2f} MB"
-        )
-        update.message.reply_text(message)
-    else:
-        update.message.reply_text("You are not authorized to use this command.")
-
-def show_image(update, context):
-    user_id = update.message.chat_id if update.message else update.callback_query.message.chat_id
-    page = current_page.get(user_id, 0)
-    image_url = image_urls[page]
+# Define a function to handle /start command
+async def start(update: Update, context: CallbackContext) -> None:
+    user = update.message.from_user
+    user_data = {
+        'user_id': user.id,
+        'username': user.username,
+        'first_name': user.first_name,
+        'last_name': user.last_name
+    }
+    users_collection.update_one({'user_id': user.id}, {'$set': user_data}, upsert=True)
+    
     keyboard = [
-        [InlineKeyboardButton("Previous", callback_data='prev')],
         [InlineKeyboardButton("Next", callback_data='next')],
+        [InlineKeyboardButton("Previous", callback_data='previous')],
         [InlineKeyboardButton("Skip Tutorial", callback_data='skip')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    context.bot.send_photo(
-        chat_id=user_id,
-        photo=image_url,
-        reply_markup=reply_markup
-    )
+    
+    await update.message.reply_text('Welcome to the bot tutorial!', reply_markup=reply_markup)
 
-def button(update, context):
+# Handle callback queries
+async def button(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
-    user_id = query.message.chat_id
-    page = current_page.get(user_id, 0)
-    if query.data == 'next':
-        if page < len(image_urls) - 1:
-            current_page[user_id] += 1
-    elif query.data == 'prev':
-        if page > 0:
-            current_page[user_id] -= 1
-    elif query.data == 'skip':
-        query.message.reply_text("Tutorial skipped!")
+    data = query.data
+    
+    if data == 'next':
+        # Display the next image (update with your own logic)
+        image_url = "https://example.com/next_image.jpg"
+        await query.message.reply_photo(photo=image_url)
+    elif data == 'previous':
+        # Display the previous image (update with your own logic)
+        image_url = "https://example.com/previous_image.jpg"
+        await query.message.reply_photo(photo=image_url)
+    elif data == 'skip':
+        # Display payment options
+        keyboard = [
+            [InlineKeyboardButton("Google Pay", url=config.GPAY_URL)],
+            [InlineKeyboardButton("Paytm", url=config.PAYTM_URL)],
+            [InlineKeyboardButton("PhonePe", url=config.PHONEPE_URL)]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.message.reply_text('Select a payment method:', reply_markup=reply_markup)
+    
+    await query.answer()
+
+# Handle /broadcast command (admin only)
+async def broadcast(update: Update, context: CallbackContext) -> None:
+    if update.message.from_user.id != int(config.ADMIN_ID):
+        await update.message.reply_text("You are not authorized to use this command.")
         return
-    query.answer()
-    show_image(update, context)
-
-def start(update, context):
-    user_id = update.message.chat_id
-    if users_collection.count_documents({'user_id': user_id}) == 0:
-        add_user(user_id, update.message.chat.username)
-    notify_channel(f"Bot started. User {user_id} has started the tutorial.")
-    current_page[user_id] = 0
-    show_image(update, context)
-
-def broadcast(update, context):
-    if update.message.chat_id == config.ADMIN_ID:
-        message = ' '.join(context.args)
-        broadcast_message(message)
-    else:
-        update.message.reply_text("You are not authorized to use this command.")
-
-def broadcast_message(message):
-    for user in users_collection.find():
+    
+    message = ' '.join(context.args)
+    if not message:
+        await update.message.reply_text("Please provide a message to broadcast.")
+        return
+    
+    users = users_collection.find()
+    for user in users:
         try:
-            context.bot.send_message(chat_id=user['user_id'], text=message)
+            await context.bot.send_message(chat_id=user['user_id'], text=message)
         except Exception as e:
-            logging.error(f"Failed to send message to {user['user_id']}: {e}")
+            logger.error(f"Failed to send message to user {user['user_id']}: {e}")
+    
+    await update.message.reply_text("Broadcast message sent.")
 
-def notify_channel(message):
-    context.bot.send_message(chat_id=config.CHANNEL_ID, text=message)
-
-def stop(update, context):
-    notify_channel("Bot stopped.")
-    updater.stop()
+# Handle /usercount command (admin only)
+async def user_count(update: Update, context: CallbackContext) -> None:
+    if update.message.from_user.id != int(config.ADMIN_ID):
+        await update.message.reply_text("You are not authorized to use this command.")
+        return
+    
+    total_users = users_collection.count_documents({})
+    await update.message.reply_text(f"★ Total Users: {total_users}")
 
 def main():
-    global updater
-    updater = Updater(config.TOKEN)
-    dispatcher = updater.dispatcher
+    # Create the Application and pass it your bot's token.
+    application = Application.builder().token(config.TOKEN).build()
 
-    dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(CallbackQueryHandler(button))
-    dispatcher.add_handler(CommandHandler('broadcast', broadcast))
-    dispatcher.add_handler(CommandHandler('statistics', show_statistics))  # Command for stats
+    # Add handlers
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('broadcast', broadcast))
+    application.add_handler(CommandHandler('usercount', user_count))
+    application.add_handler(CallbackQueryHandler(button))
 
-    updater.start_polling()
-    updater.idle()
+    # Run the bot until you send a signal to stop
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
