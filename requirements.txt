@@ -1,4 +1,14 @@
 python-telegram-bot==20.1
 requests==2.28.2  # for making HTTP requests
-pymongo==4.4.0    # for MongoDB interaction
 urllib3==1.26.15
+pyrogram>=2.0.30
+tgcrypto
+pymongo[srv]==4.5.0
+motor==2.5.1
+marshmallow==3.14.1
+umongo==3.0.1
+requests
+bs4
+datetime
+pytz
+aiohttp
