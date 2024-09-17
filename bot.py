@@ -1,35 +1,20 @@
-import os
+import logging
 from pymongo import MongoClient
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
-import logging
+import config
 
 # Setup logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
-# Retrieve environment variables
-MONGODB_URI = os.getenv('MONGODB_URI')
-DATABASE_NAME = os.getenv('DATABASE_NAME')
-CHANNEL_ID = os.getenv('CHANNEL_ID')
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
-TOTAL_STORAGE_MB = float(os.getenv('TOTAL_STORAGE_MB'))
-used_storage = 15.23  # Example, replace with actual calculation if needed
-free_storage = TOTAL_STORAGE_MB - used_storage
-
 # MongoDB setup
-client = MongoClient(MONGODB_URI)
-db = client[DATABASE_NAME]
+client = MongoClient(config.MONGODB_URI)
+db = client[config.DATABASE_NAME]
 users_collection = db['users']
 
 # List of image URLs
-image_urls = [
-    'https://example.com/img1.jpg',
-    'https://example.com/img2.jpg',
-    'https://example.com/img3.jpg',
-    'https://example.com/newimg1.jpg',
-    'https://example.com/newimg2.jpg'
-]
+image_urls = config.DEFAULT_IMAGE_URLS
 
 current_page = {}
 
@@ -50,7 +35,7 @@ def get_chat_count():
     return 950  # Example number of chats
 
 def show_statistics(update, context):
-    if update.message.chat_id == ADMIN_ID:
+    if update.message.chat_id == config.ADMIN_ID:
         user_count = get_user_count()
         chat_count = get_chat_count()
         message = (
@@ -104,7 +89,7 @@ def start(update, context):
     show_image(update, context)
 
 def broadcast(update, context):
-    if update.message.chat_id == ADMIN_ID:
+    if update.message.chat_id == config.ADMIN_ID:
         message = ' '.join(context.args)
         broadcast_message(message)
     else:
@@ -118,7 +103,7 @@ def broadcast_message(message):
             logging.error(f"Failed to send message to {user['user_id']}: {e}")
 
 def notify_channel(message):
-    context.bot.send_message(chat_id=CHANNEL_ID, text=message)
+    context.bot.send_message(chat_id=config.CHANNEL_ID, text=message)
 
 def stop(update, context):
     notify_channel("Bot stopped.")
@@ -126,7 +111,7 @@ def stop(update, context):
 
 def main():
     global updater
-    updater = Updater(os.getenv('TELEGRAM_BOT_TOKEN'))
+    updater = Updater(config.TOKEN)
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler('start', start))
